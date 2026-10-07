@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AI 工牌定位推送</title>
+<title>AI 星图定位推送</title>
 <style>
   body{font-family:system-ui,-apple-system,sans-serif;background:#0b0f14;color:#e6eef7;margin:0;padding:16px;max-width:480px;margin:0 auto}
   h1{font-size:20px;margin:0 0 6px}
@@ -13,20 +13,26 @@
   .btn:disabled{background:#333;color:#777;cursor:default}
   .sep{font-size:12px;color:#7a8796;text-align:center;margin:16px 0 8px}
   .row{display:flex;gap:10px}
+  .row.lab{font-size:11px;color:#7a8796;margin-bottom:2px}
+  .row.lab span{flex:1;min-width:0}
   .row input{flex:1;min-width:0;padding:12px;font-size:16px;border:1px solid #2a3542;border-radius:10px;background:#11171f;color:#e6eef7}
   #status{font-size:14px;margin-top:14px;line-height:1.5;white-space:pre-wrap;word-break:break-all}
   .ok{color:#4caf50}.err{color:#ff5252}.info{color:#9aa7b5}
 </style>
 </head>
 <body>
-<h1>AI 工牌 · 定位推送</h1>
-<p>把坐标与时间发送到 AI 工牌，用于星图定位。需使用 Chrome / Edge 打开。</p>
+<h1>AI 星图 · 定位推送</h1>
+<p>把坐标与时间发送到 星图，用于星图定位。需使用 Chrome / Edge 打开。</p>
 <button class="btn" id="btnConnect">1. 连接蓝牙</button>
 <button class="btn" id="btnGps" disabled>2. 发送我的位置（浏览器定位）</button>
-<div class="sep">— 定位不可用 / 电脑端，可直接手动输入坐标 —</div>
+<div class="sep">— 定位不可用 / 电脑端，可手动输入坐标（顺序：左经度、右纬度）—</div>
+<div class="row lab">
+  <span>经度 longitude（-180~180，东经为正、西经为负）</span>
+  <span>纬度 latitude（-90~90，北纬为正、南纬为负）</span>
+</div>
 <div class="row">
-  <input id="inLat" type="text" inputmode="decimal" value="31.239752" placeholder="纬度 lat">
   <input id="inLon" type="text" inputmode="decimal" value="121.499588" placeholder="经度 lon">
+  <input id="inLat" type="text" inputmode="decimal" value="31.239752" placeholder="纬度 lat">
 </div>
 <button class="btn sec" id="btnManual" disabled>发送手动坐标</button>
 <div id="status">打开后点“连接蓝牙”，在弹出的蓝牙列表中选择 AI-Passport。</div>
@@ -47,12 +53,12 @@ function sendCoord(lat, lon, note){
   if(!char){ log('请先连接蓝牙。','err'); return; }
   var ts=Math.floor(Date.now()/1000);
   var payload=lat+','+lon+','+ts;
-  log('正在写入工牌… '+payload);
+  log('正在写入星图… '+payload);
   var data=new TextEncoder().encode(payload);
   var p=char.writeValueWithResponse ? char.writeValueWithResponse(data) : char.writeValue(data);
   p.then(function(){
     log('已发送：纬度 '+lat+'  经度 '+lon+'\n时间 '+new Date(ts*1000).toLocaleString()+
-        (note?'\n'+note:'')+'\n工牌星图位置已更新。','ok');
+        (note?'\n'+note:'')+'\n星图位置已更新。','ok');
   }).catch(function(e){ log('发送失败：'+e.message,'err'); });
 }
 
@@ -60,9 +66,9 @@ function sendCoord(lat, lon, note){
 btnC.onclick = async function(){
   if(!navigator.bluetooth){ log('此浏览器不支持 Web Bluetooth，请用 Chrome / Edge 打开。','err'); return; }
   try{
-    log('请在弹出列表中选择 AI 工牌（AI-Passport）…');
+    log('请在弹出列表中选择 蓝牙 （AI-Passport）…');
     var device=await navigator.bluetooth.requestDevice({filters:[{services:[SERVICE]}], optionalServices:[SERVICE]});
-    deviceName=device.name||'工牌';
+    deviceName=device.name||'星图';
     log('已选择：'+deviceName+'，正在连接…');
     var server=await device.gatt.connect();
     var svc=await server.getPrimaryService(SERVICE);
