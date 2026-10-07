@@ -21,8 +21,8 @@
 <button class="btn" id="btnSend" disabled>2. 发送我的位置</button>
 <div id="status">打开后点上方按钮，在弹出的蓝牙列表中选择 AI 工牌。</div>
 <script>
-var SERVICE = 'fff0';  // 与固件 BLE 服务一致
-var CHAR    = 'fff1';  // 与固件可写特征一致
+var SERVICE = '0000fff0-0000-1000-8000-00805f9b34fb';  // 与固件 BLE 服务 0xFFF0 一致（Web Bluetooth 需完整 128 位 UUID）
+var CHAR    = '0000fff1-0000-1000-8000-00805f9b34fb';  // 与固件可写特征 0xFFF1 一致
 var btnC = document.getElementById('btnConnect');
 var btnS = document.getElementById('btnSend');
 var st   = document.getElementById('status');
