@@ -9,7 +9,11 @@
   h1{font-size:20px;margin:0 0 6px}
   p{font-size:13px;color:#9aa7b5;margin:4px 0 12px}
   .btn{display:block;width:100%;padding:14px;margin:10px 0;font-size:16px;border:none;border-radius:10px;cursor:pointer;background:#2d5bff;color:#fff}
+  .btn.sec{background:#1f7a4d}
   .btn:disabled{background:#333;color:#777;cursor:default}
+  .sep{font-size:12px;color:#7a8796;text-align:center;margin:16px 0 8px}
+  .row{display:flex;gap:10px}
+  .row input{flex:1;min-width:0;padding:12px;font-size:16px;border:1px solid #2a3542;border-radius:10px;background:#11171f;color:#e6eef7}
   #status{font-size:14px;margin-top:14px;line-height:1.5;white-space:pre-wrap;word-break:break-all}
   .ok{color:#4caf50}.err{color:#ff5252}.info{color:#9aa7b5}
 </style>
@@ -18,45 +22,118 @@
 <h1>AI 工牌 · 定位推送</h1>
 <p>把手机当前位置（GPS）与时间发送到 AI 工牌，用于星图定位。需使用 Chrome / Edge 打开。</p>
 <button class="btn" id="btnConnect">1. 连接工牌</button>
-<button class="btn" id="btnSend" disabled>2. 发送我的位置</button>
+<button class="btn" id="btnSend" disabled>2. 发送我的位置（GPS）</button>
+<div class="sep">— 室内 / GPS 不可用时，可手动输入坐标 —</div>
+<div class="row">
+  <input id="inLat" type="text" inputmode="decimal" value="32.988251" placeholder="纬度 lat">
+  <input id="inLon" type="text" inputmode="decimal" value="113.661333" placeholder="经度 lon">
+</div>
+<button class="btn sec" id="btnManual" disabled>发送手动坐标</button>
 <div id="status">打开后点上方按钮，在弹出的蓝牙列表中选择 AI 工牌。</div>
 <script>
-var SERVICE = '0000fff0-0000-1000-8000-00805f9b34fb';  // 与固件 BLE 服务 0xFFF0 一致（Web Bluetooth 需完整 128 位 UUID）
-var CHAR    = '0000fff1-0000-1000-8000-00805f9b34fb';  // 与固件可写特征 0xFFF1 一致
+var SERVICE = '0000fff0-0000-1000-8000-00805f9b34fb';  // 固件服务 0xFFF0（Web Bluetooth 需完整 UUID）
+var CHAR    = '0000fff1-0000-1000-8000-00805f9b34fb';  // 固件可写特征 0xFFF1
 var btnC = document.getElementById('btnConnect');
 var btnS = document.getElementById('btnSend');
+var btnM = document.getElementById('btnManual');
+var inLat = document.getElementById('inLat');
+var inLon = document.getElementById('inLon');
 var st   = document.getElementById('status');
-var char = null;
+var char = null, deviceName = '';
 
 function log(t, c){ st.className = c || 'info'; st.textContent = t; }
+
+// 统一的写坐标：lat,lon 为字符串/数字，时间取本机
+function sendCoord(lat, lon){
+  if(!char){ log('请先连接工牌。', 'err'); return; }
+  var ts = Math.floor(Date.now()/1000);
+  var payload = lat + ',' + lon + ',' + ts;
+  var data = new TextEncoder().encode(payload);
+  log('正在写入工牌… ' + payload);
+  var p = (char.writeValueWithResponse
+      ? char.writeValueWithResponse(data)
+      : char.writeValue(data));
+  p.then(function(){
+    log('已发送：纬度 ' + lat + '  经度 ' + lon + '\n时间 ' +
+        new Date(ts*1000).toLocaleString() + '\n工牌星图位置已更新。', 'ok');
+  }).catch(function(e){ log('发送失败：' + e.message, 'err'); });
+}
 
 btnC.onclick = async function(){
   if(!navigator.bluetooth){ log('此浏览器不支持 Web Bluetooth，请用手机 Chrome 或 Edge 打开本页。', 'err'); return; }
   try{
-    log('请在弹出列表中选择 AI 工牌（Passport）…');
-    var device = await navigator.bluetooth.requestDevice({ filters:[{ services:[SERVICE] }], optionalServices:[SERVICE] });
-    log('已选择：' + device.name + '，正在连接…');
+    log('请在弹出列表中选择 AI 工牌（AI-Passport）…');
+    var device = await navigator.bluetooth.requestDevice({
+      filters:[{ services:[SERVICE] }],
+      optionalServices:[SERVICE]
+    });
+    deviceName = device.name || '工牌';
+    log('已选择：' + deviceName + '，正在连接…');
     var server = await device.gatt.connect();
     var svc = await server.getPrimaryService(SERVICE);
     char = await svc.getCharacteristic(CHAR);
     btnS.disabled = false;
-    log('已连接 ' + device.name + '。点"发送我的位置"，坐标和时间将写入工牌。', 'ok');
+    btnM.disabled = false;
+    log('已连接 ' + deviceName + '。可点“发送我的位置”，或用下方手动坐标。', 'ok');
+    device.addEventListener('gattserverdisconnected', function(){
+      char = null; btnS.disabled = true; btnM.disabled = true;
+      log('蓝牙已断开，请重新点“连接工牌”。', 'err');
+    });
   }catch(e){ log('连接失败：' + e.message, 'err'); }
 };
 
+// 定位错误转中文引导
+function geoErrText(e){
+  if(e && e.code === 1) return '定位权限被拒绝。请到 手机设置→应用→Edge(或浏览器)→权限→位置，选“允许/精确位置”，并打开系统定位(GPS)。';
+  if(e && e.code === 2) return '当前无法获取位置。请下拉通知栏打开“位置信息/GPS”，到窗边或户外再试；也可直接用下方手动坐标发送。';
+  if(e && e.code === 3) return '定位超时（室内 GPS 信号弱）。请到开阔处重试，或直接用下方手动坐标发送。';
+  return '定位失败：' + (e && e.message ? e.message : '未知错误') + '。可改用下方手动坐标。';
+}
+
+// 先高精度，失败自动降级一次低精度（网络/WiFi 大致定位）
+function getPosition(cb){
+  var tried = 0;
+  function attempt(high){
+    navigator.geolocation.getCurrentPosition(
+      cb,
+      function(err){
+        tried++;
+        // 只在明确拿不到时降级，超时不立刻降级，给一次更长机会
+        if(high && err.code !== 1){
+          log('高精度失败(code=' + err.code + ')，尝试网络定位…', 'info');
+          attempt(false);
+        } else {
+          cb({__err: err});
+        }
+      },
+      { enableHighAccuracy: high, timeout: high ? 60000 : 30000, maximumAge: 0 }
+    );
+  }
+  attempt(true);
+}
+
 btnS.onclick = function(){
-  if(!navigator.geolocation){ log('此浏览器不支持定位。', 'err'); return; }
   if(!char){ log('请先连接工牌。', 'err'); return; }
+  if(!navigator.geolocation){ log('此浏览器不支持定位', 'err'); return; }
   log('正在获取定位…');
-  navigator.geolocation.getCurrentPosition(function(pos){
-    var lat = pos.coords.latitude.toFixed(6);
-    var lon = pos.coords.longitude.toFixed(6);
-    var ts  = Math.floor(Date.now()/1000);
-    var data = new TextEncoder().encode(lat + ',' + lon + ',' + ts);
-    char.writeValue(data).then(function(){
-      log('已发送：纬度 ' + lat + '  经度 ' + lon + '\n时间 ' + new Date(ts*1000).toLocaleString() + '\n工牌星图位置已更新。', 'ok');
-    }).catch(function(e){ log('发送失败：' + e.message, 'err'); });
-  }, function(e){ log('定位失败：' + e.message + '（请在浏览器允许定位权限）', 'err'); }, { enableHighAccuracy:true, timeout:10000 });
+  navigator.geolocation.getCurrentPosition(
+    function(pos){ /* 成功逻辑同上 */ },
+    function(err){
+      log('原生错误 → code=' + err.code + '  msg=' + err.message, 'err');
+      // 1=PERMISSION_DENIED  2=POSITION_UNAVAILABLE  3=TIMEOUT
+    },
+    { enableHighAccuracy:true, timeout:60000, maximumAge:0 }
+  );
+};
+
+btnM.onclick = function(){
+  var lat = parseFloat(inLat.value);
+  var lon = parseFloat(inLon.value);
+  if(isNaN(lat) || isNaN(lon) || Math.abs(lat)>90 || Math.abs(lon)>180){
+    log('请输入有效的经纬度（纬度 -90~90，经度 -180~180）。', 'err');
+    return;
+  }
+  sendCoord(lat.toFixed(6), lon.toFixed(6));
 };
 </script>
 </body>
