@@ -25,8 +25,8 @@
 <button class="btn" id="btnSend" disabled>2. 发送我的位置（GPS）</button>
 <div class="sep">— 室内 / GPS 不可用时，可手动输入坐标 —</div>
 <div class="row">
-  <input id="inLat" type="text" inputmode="decimal" value="32.988251" placeholder="纬度 lat">
-  <input id="inLon" type="text" inputmode="decimal" value="113.661333" placeholder="经度 lon">
+  <input id="inLat" type="text" inputmode="decimal" value="31.239752" placeholder="纬度 lat">
+  <input id="inLon" type="text" inputmode="decimal" value="121.499588" placeholder="经度 lon">
 </div>
 <button class="btn sec" id="btnManual" disabled>发送手动坐标</button>
 <div id="status">打开后点上方按钮，在弹出的蓝牙列表中选择 AI 工牌。</div>
@@ -92,24 +92,11 @@ function geoErrText(e){
 
 // 先高精度，失败自动降级一次低精度（网络/WiFi 大致定位）
 function getPosition(cb){
-  var tried = 0;
-  function attempt(high){
-    navigator.geolocation.getCurrentPosition(
-      cb,
-      function(err){
-        tried++;
-        // 只在明确拿不到时降级，超时不立刻降级，给一次更长机会
-        if(high && err.code !== 1){
-          log('高精度失败(code=' + err.code + ')，尝试网络定位…', 'info');
-          attempt(false);
-        } else {
-          cb({__err: err});
-        }
-      },
-      { enableHighAccuracy: high, timeout: high ? 60000 : 30000, maximumAge: 0 }
-    );
-  }
-  attempt(true);
+  navigator.geolocation.getCurrentPosition(
+    cb,
+    function(err){ cb({__err: err}); }, // 直接返回错误，不再自动降级
+    { enableHighAccuracy: true, timeout: 60000, maximumAge: 0 }
+  );
 }
 
 btnS.onclick = function(){
